@@ -89,21 +89,17 @@ class Bewerber(models.Model):
     kontaktdaten = models.ForeignKey(Kontaktdaten, on_delete=models.CASCADE)
     faehigkeiten_qualifikationen = models.TextField()
     motivationsschreiben = models.TextField()
+    wunschberuf_1 = models.ForeignKey(Ausbildungsberuf, on_delete=models.CASCADE, related_name='+', null=True,
+    blank=True)
+    wunschberuf_2 = models.ForeignKey(Ausbildungsberuf, on_delete=models.CASCADE, related_name='+', null=True,
+    blank=True)
+    wunschberuf_3 = models.ForeignKey(Ausbildungsberuf, on_delete=models.CASCADE, related_name='+', null=True,
+    blank=True)
+    wunschberuf_4 = models.ForeignKey(Ausbildungsberuf, on_delete=models.CASCADE, related_name='+', null=True,
+    blank=True)
 
     def __str__(self):
         return f"{self.vorname} {self.nachname}"
-
-class BewerberWunschberuf(models.Model):
-    bewerber = models.ForeignKey(Bewerber, on_delete=models.CASCADE)
-    ausbildungsberuf = models.ForeignKey(Ausbildungsberuf, on_delete=models.CASCADE)
-
-    class Meta:
-        unique_together = ("bewerber", "ausbildungsberuf")
-
-    def clean(self):
-        existing_count = BewerberWunschberuf.objects.filter(bewerber=self.bewerber).count()
-        if existing_count >= 4 and not self.pk:
-            raise ValidationError("Es dürfen maximal 4 Wunschberufe ausgewählt werden.")   
 
 QUARTAL_CHOICES = [
     ("q1", "01.08 – 31.10"),
@@ -149,22 +145,6 @@ class Matching(models.Model):
     #score hinzufügen? -> score = models.FloatField(default=0)
     status = models.CharField(max_length=20, choices=MATCH_STATUS_CHOICES, default="berechnet")
 
-    def clean(self):
-        if self.status in ["vorgeschlagen", "akzeptiert"]:
-            bestehende = Matching.objects.filter(
-                unternehmen_ausbildungsplatz=self.unternehmen_ausbildungsplatz
-            ).exclude(id=self.id)
-            for match in bestehende:
-                if match.status in ["vorgeschlagen", "akzeptiert", "blockiert"]:
-                    raise ValidationError("Dieser Ausbildungsplatz ist bereits reserviert.")
-
-    def save(self, *args, **kwargs):
-        self.clean()
-        if self.status in ["vorgeschlagen", "akzeptiert"]:
-            self.unternehmen_ausbildungsplatz.status = "blockiert" if self.status == "vorgeschlagen" else "vergeben"
-            self.unternehmen_ausbildungsplatz.save()
-        super().save(*args, **kwargs)
-
     def __str__(self):
         return f"{self.bewerber} → {self.unternehmen_ausbildungsplatz} ({self.status})"
 
@@ -182,16 +162,6 @@ class Einsatz(models.Model):
     startdatum = models.CharField(max_length=5, null=True, blank=True)
     enddatum = models.CharField(max_length=5, null=True, blank=True)
     status = models.CharField(max_length=20, choices=EINSATZ_STATUS_CHOICES, default="ausstehend")
-
-    def save(self, *args, **kwargs):
-        quartal = self.matching.unternehmen_ausbildungsplatz.zeitraum
-        start, ende = QUARTAL_DATEN[quartal]
-
-        self.start = start
-        self.ende = ende
-
-        super().save(*args, **kwargs)
-
 
     def __str__(self):
         return f"Einsatz: {self.matching.bewerber} – {self.matching.unternehmen_ausbildungsplatz} ({self.status})"
